@@ -7,11 +7,29 @@
 | 1 | `cdk deploy` | Mallory | Claude Code's auto-mode classifier refuses IAM-creating deploys. Approve interactively or add a Bash allow-rule. |
 | 2 | Yahoo app approval | Matthew | Submitted; awaiting Yahoo |
 | 3 | X developer account | Matthew | Application drafted |
-| 4 | League key | Matthew | Needed as `-c league_key=...` |
+| 4 | League key | Matthew | See "Finding the league key" below |
 | 5 | Cost Explorer enable | Mallory | Console only; ~24h to populate |
 
 Everything else is built, tested, and committed. Nothing runs until step 1, and
 even then every schedule ships **disabled**.
+
+## Finding the league key
+
+The key is `nfl.l.<league id>`. The league ID is the number in the URL when the
+league is open in a browser (not the phone app):
+
+    https://football.fantasysports.yahoo.com/f1/482910   ->   nfl.l.482910
+
+`nfl` is Yahoo's shorthand for the current season, which avoids looking up the
+season-specific game code that changes every year.
+
+If Matthew is in more than one league, confirm which is which — a league ID
+alone gives no way to tell them apart, and the wrong one posts another league's
+trades. After the Yahoo bootstrap, this lists them all by name:
+
+```bash
+AWS_PROFILE=gotffl-admin python scripts/find_league_key.py
+```
 
 ## Deploy
 
