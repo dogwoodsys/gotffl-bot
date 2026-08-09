@@ -15,6 +15,10 @@ GotfflStack(
     "GotfflStack",
     stack_name="gotffl",
     alert_email=app.node.try_get_context("alert_email") or "mallorymgrills@gmail.com",
+    # No league ID yet. UNSET deploys fine (nothing is enabled) and every
+    # handler refuses rather than guessing, so a forgotten value cannot post
+    # to the wrong league.
+    league_key=app.node.try_get_context("league_key") or "UNSET",
     env=cdk.Environment(account="159198628641", region="ca-central-1"),
     description="Game of Throws Bot - Yahoo Fantasy to X relay",
 )

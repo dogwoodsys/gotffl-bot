@@ -24,16 +24,14 @@ dev = [
     "types-requests",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=gotffl --cov-report=term-missing --cov-fail-under=90"
+addopts = "--cov --cov-report=term-missing --cov-fail-under=90"
 filterwarnings = ["error"]
 
 [tool.coverage.run]
-source = ["src/gotffl"]
+source = ["layers/shared/python/shared", "functions"]
+omit = ["*/tests/*"]
 
 [tool.ruff]
 line-length = 100
@@ -41,6 +39,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+# N818 wants an "Error" suffix on every exception. RateLimited/SegmentTooLong
+# read better at the call site and are raised, not returned.
+# UP042 prefers enum.StrEnum, but these values are serialised into SQS bodies
+# where `str` inheritance keeps json.dumps working without a custom encoder.
+ignore = ["N818", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# The fullwidth colon is the point of the test.
+"tests/test_text.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.12"

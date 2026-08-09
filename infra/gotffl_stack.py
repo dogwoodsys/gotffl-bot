@@ -47,10 +47,23 @@ SCHEDULES = {
 
 
 class GotfflStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, *, alert_email: str, **kwargs):
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        alert_email: str,
+        league_key: str,
+        **kwargs,
+    ):
         super().__init__(scope, construct_id, **kwargs)
 
         Tags.of(self).add("Project", "gotffl")
+
+        # Passed in rather than looked up at runtime: a wrong league key would
+        # post another league's transactions, so it belongs in the reviewed
+        # template, not in a mutable parameter.
+        self.league_key = league_key
 
         self.alerts = self._alerts_topic(alert_email)
         self.state_table = self._state_table()
@@ -136,10 +149,27 @@ class GotfflStack(Stack):
 
     # -------------------------------------------------------------- functions
 
+    @property
+    def shared_layer(self) -> lambda_.LayerVersion:
+        """Cross-Lambda code, mounted at /opt/python. Handlers put that on
+        sys.path, so `from shared.logger import get_logger` resolves the same
+        way locally and in Lambda."""
+        if not hasattr(self, "_shared_layer"):
+            self._shared_layer = lambda_.LayerVersion(
+                self,
+                "SharedLayer",
+                layer_version_name="gotffl-shared",
+                code=lambda_.Code.from_asset("layers/shared"),
+                compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
+                compatible_architectures=[lambda_.Architecture.ARM_64],
+                description="gotffl shared modules",
+            )
+        return self._shared_layer
+
     def _fn(
         self,
         name: str,
-        handler: str,
+        source_dir: str,
         *,
         timeout: Duration,
         environment: dict[str, str],
@@ -171,11 +201,15 @@ class GotfflStack(Stack):
             function_name=f"gotffl-{name.lower()}",
             runtime=lambda_.Runtime.PYTHON_3_12,
             architecture=lambda_.Architecture.ARM_64,
-            code=lambda_.Code.from_asset("src"),
-            handler=handler,
+            code=lambda_.Code.from_asset(f"functions/{source_dir}"),
+            handler="handler.handler",
             role=role,
             memory_size=256,
             timeout=timeout,
+            layers=[self.shared_layer],
+            # Standard: X-Ray active on every Lambda. Without it a slow poll is
+            # a number in a log; with it you can see which call was slow.
+            tracing=lambda_.Tracing.ACTIVE,
             environment={"STATE_TABLE": self.state_table.table_name, **environment},
             log_group=log_group,
             reserved_concurrent_executions=reserved_concurrent_executions,
@@ -184,7 +218,7 @@ class GotfflStack(Stack):
     def _publisher(self) -> lambda_.Function:
         fn = self._fn(
             "Publish",
-            "gotffl.handlers.publish.handler",
+            "publish",
             timeout=Duration.seconds(60),
             environment={"X_PREFIX": X_PREFIX, "SHADOW_MODE_PARAM": f"{SSM_ROOT}/shadow_mode"},
             # Serialize posting so thread replies chain in order and the spend
@@ -220,9 +254,13 @@ class GotfflStack(Stack):
         for name, module, timeout, concurrency in specs:
             fn = self._fn(
                 name,
-                f"gotffl.handlers.{module}.handler",
+                module,
                 timeout=timeout,
-                environment={"YAHOO_PREFIX": YAHOO_PREFIX, "OUTBOX_URL": self.outbox.queue_url},
+                environment={
+                    "YAHOO_PREFIX": YAHOO_PREFIX,
+                    "OUTBOX_URL": self.outbox.queue_url,
+                    "YAHOO_LEAGUE_KEY": self.league_key,
+                },
                 reserved_concurrent_executions=concurrency,
             )
             self.state_table.grant_read_write_data(fn)

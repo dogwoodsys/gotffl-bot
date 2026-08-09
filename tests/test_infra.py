@@ -24,6 +24,7 @@ def template() -> Template:
         app,
         "TestStack",
         alert_email="test@example.com",
+        league_key="461.l.123456",
         env=cdk.Environment(account="111111111111", region="ca-central-1"),
     )
     return Template.from_stack(stack)
@@ -250,3 +251,57 @@ def test_staleness_alarm_treats_missing_data_as_breaching(resources: dict):
     ]
     assert len(alarms) == 1
     assert alarms[0]["Properties"]["TreatMissingData"] == "breaching"
+
+
+# ------------------------------------------------------------- observability
+
+
+def test_xray_tracing_active_on_every_lambda(resources: dict):
+    """Standard: X-Ray active on all Lambdas."""
+    fns = [r for r in resources.values() if r["Type"] == "AWS::Lambda::Function"]
+    assert len(fns) == 5
+    for fn in fns:
+        assert fn["Properties"].get("TracingConfig", {}).get("Mode") == "Active"
+
+
+def test_xray_write_permission_granted(resources: dict):
+    """Tracing without the IAM grant produces silent, traceless invocations."""
+    granted = {
+        json.dumps(r["Properties"]["Roles"], sort_keys=True)
+        for r in resources.values()
+        if r["Type"] == "AWS::IAM::Policy"
+        and "xray:PutTraceSegments" in json.dumps(r["Properties"]["PolicyDocument"])
+    }
+    assert len(granted) == 5, "every Lambda role needs X-Ray write permission"
+
+
+def test_all_lambdas_share_one_shared_layer(resources: dict):
+    layers = [r for r in resources.values() if r["Type"] == "AWS::Lambda::LayerVersion"]
+    assert len(layers) == 1
+    for fn in resources.values():
+        if fn["Type"] == "AWS::Lambda::Function":
+            assert len(fn["Properties"].get("Layers", [])) == 1
+
+
+def test_league_key_is_baked_into_readers_not_left_to_runtime(resources: dict):
+    """A wrong league key posts another league's data. It belongs in the
+    reviewed template, not a mutable parameter."""
+    readers = [
+        r
+        for r in resources.values()
+        if r["Type"] == "AWS::Lambda::Function"
+        and r["Properties"]["FunctionName"] != "gotffl-publish"
+    ]
+    assert len(readers) == 4
+    for fn in readers:
+        assert fn["Properties"]["Environment"]["Variables"]["YAHOO_LEAGUE_KEY"] == "461.l.123456"
+
+
+def test_publisher_does_not_receive_the_league_key(resources: dict):
+    publisher = next(
+        r
+        for r in resources.values()
+        if r["Type"] == "AWS::Lambda::Function"
+        and r["Properties"]["FunctionName"] == "gotffl-publish"
+    )
+    assert "YAHOO_LEAGUE_KEY" not in publisher["Properties"]["Environment"]["Variables"]

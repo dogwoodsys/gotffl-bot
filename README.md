@@ -84,7 +84,14 @@ before a single post is published.
 
 ## Status
 
-In development. Not yet live.
+In development. Not yet live — no post has ever been sent.
+
+The application code and infrastructure are complete and tested (356 tests,
+98% coverage, 100% on every handler, processor, and validator). What remains is
+credentials: the Yahoo app is awaiting approval, and the social developer
+account is not yet registered.
+
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) for deployment and operations.
 
 ## License
 
