@@ -11,3 +11,6 @@ cdk.out/
 .DS_Store
 node_modules/
 package-lock.json
+
+# Local deploy config — contains the real league ID
+.env.deploy

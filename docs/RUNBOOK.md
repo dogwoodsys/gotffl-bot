@@ -6,9 +6,10 @@
 |---|---|---|---|
 | 1 | `cdk deploy` | Mallory | Claude Code's auto-mode classifier refuses IAM-creating deploys. Approve interactively or add a Bash allow-rule. |
 | 2 | Yahoo app approval | Matthew | Submitted; awaiting Yahoo |
-| 3 | X developer account | Matthew | Application drafted |
-| 4 | League key | Matthew | See "Finding the league key" below |
-| 5 | Cost Explorer enable | Mallory | Console only; ~24h to populate |
+| 3 | X developer account | — | Done — registered, no approval required |
+| 4 | League key | — | Done — in git-ignored `.env.deploy` |
+| 5 | Cost Explorer enable | — | Done — tag activation possible ~24h later |
+| 6 | X credentials into SSM | Mallory | Four SecureString parameters |
 
 Everything else is built, tested, and committed. Nothing runs until step 1, and
 even then every schedule ships **disabled**.
@@ -34,14 +35,17 @@ AWS_PROFILE=gotffl-admin python scripts/find_league_key.py
 ## Deploy
 
 ```bash
-cd ~/projects/gotffl-bot
-export AWS_PROFILE=gotffl-admin AWS_REGION=ca-central-1
-./node_modules/.bin/cdk diff -c league_key=461.l.XXXXXX      # review first
-./node_modules/.bin/cdk deploy -c league_key=461.l.XXXXXX
+./scripts/deploy.sh diff      # review first
+./scripts/deploy.sh deploy
 ```
 
-Without `-c league_key`, the stack deploys with `UNSET` and every reader
-refuses at validation rather than guessing a league.
+The script reads `LEAGUE_KEY` from `.env.deploy`, which is **git-ignored** —
+this repo is public and the league ID identifies a real private league. It is
+not a credential, but it does not need to be readable by strangers. Copy
+`.env.deploy.example` to `.env.deploy` on any new machine.
+
+Deploying without a league key leaves it as `UNSET`, and every reader refuses
+at validation rather than guessing a league.
 
 ## Parameters
 
