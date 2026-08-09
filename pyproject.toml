@@ -1,0 +1,48 @@
+[project]
+name = "gotffl-bot"
+version = "0.1.0"
+description = "Posts fantasy football league activity from Yahoo Fantasy Sports to X"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.35",
+    "requests>=2.32",
+    "requests-oauthlib>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aws-cdk-lib>=2.150",
+    "constructs>=10.3",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "moto[dynamodb,ssm,sqs,sns]>=5.0",
+    "responses>=0.25",
+    "freezegun>=1.5",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "boto3-stubs[dynamodb,ssm,sqs,sns]",
+    "types-requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=gotffl --cov-report=term-missing --cov-fail-under=90"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["src/gotffl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true

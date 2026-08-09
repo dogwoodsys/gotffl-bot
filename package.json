@@ -1,0 +1,27 @@
+{
+  "name": "gotffl-bot",
+  "version": "1.0.0",
+  "description": "A private, non-commercial bot that posts activity from a single 12-team recreational fantasy football league on Yahoo Fantasy Sports to a dedicated social media account, so league members can follow what's happening in one place.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogwoodsys/gotffl-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/dogwoodsys/gotffl-bot/issues"
+  },
+  "homepage": "https://github.com/dogwoodsys/gotffl-bot#readme",
+  "devDependencies": {
+    "aws-cdk": "^2.1135.1"
+  }
+}
