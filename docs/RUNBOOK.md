@@ -66,13 +66,15 @@ cannot delete a credential.
 | `/gotffl/shadow_mode` | String | by hand — `true` until launch |
 
 ```bash
-aws ssm put-parameter --name /gotffl/shadow_mode --value true --type String
-for k in consumer_key consumer_secret access_token access_token_secret; do
-  read -rsp "X $k: " v && echo
-  aws ssm put-parameter --name "/gotffl/x/$k" --value "$v" --type SecureString --overwrite
-done
-python scripts/yahoo_bootstrap.py
+./scripts/put-credentials.sh x       # four X OAuth 1.0a values
+python scripts/yahoo_bootstrap.py    # Yahoo, after approval
 ```
+
+**Use the script, not a bare `aws ssm put-parameter`.** A bare command uses
+whatever profile the shell happens to have; an `export` that doesn't carry
+between invocations will silently write live credentials to the wrong AWS
+account. The script pins the profile from `.env.deploy` and refuses to write
+unless the caller is account `159198628641`. This has already happened once.
 
 ## Shadow week
 
