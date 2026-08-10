@@ -124,7 +124,28 @@ All to SNS `gotffl-alerts`.
 | `gotffl-outbox-dlq-not-empty` | A post will never send | Inspect the message, fix, redrive |
 | `gotffl-failure-dlq-not-empty` | A reader or schedule failed after retries | Check the reader's log |
 | `gotffl-post-rate-high` | >25 posts/day | **Set shadow_mode=true immediately**, then investigate — this is the dedup-failure signature |
-| `gotffl-no-posts-8-days` | Nothing posted in 8 days during season | The dangerous one: healthy, erroring on nothing, silently posting nothing. Check the poller log and Yahoo auth. |
+| `gotffl-no-posts-7-days` | Nothing posted in 7 days during season | The dangerous one: healthy, erroring on nothing, silently posting nothing. Check the poller log and Yahoo auth. |
+
+## Recovering from a failed first deploy
+
+The state table carries `RemovalPolicy.RETAIN` so a later `cdk destroy` cannot
+take the dedup history with it. On a *failed first create* that same policy
+leaves the table behind, and the next deploy then fails with "table already
+exists". If the table is empty, drop it and the rolled-back stack:
+
+```bash
+source .env.deploy; export AWS_PROFILE AWS_REGION
+aws dynamodb describe-table --table-name gotffl-state \
+  --query 'Table.{Items:ItemCount,Bytes:TableSizeBytes}'   # confirm it is empty FIRST
+aws dynamodb delete-table --table-name gotffl-state
+aws cloudformation delete-stack --stack-name gotffl
+aws cloudformation wait stack-delete-complete --stack-name gotffl
+./scripts/deploy.sh deploy
+```
+
+If the table is **not** empty, do not delete it — it holds the record of what
+has already been posted, and losing it means the bot re-posts history. Import
+it into the new stack instead.
 
 ## Known failure modes
 

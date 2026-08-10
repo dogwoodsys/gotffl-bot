@@ -247,10 +247,23 @@ def test_staleness_alarm_treats_missing_data_as_breaching(resources: dict):
         r
         for r in resources.values()
         if r["Type"] == "AWS::CloudWatch::Alarm"
-        and r["Properties"].get("AlarmName") == "gotffl-no-posts-8-days"
+        and r["Properties"].get("AlarmName") == "gotffl-no-posts-7-days"
     ]
     assert len(alarms) == 1
     assert alarms[0]["Properties"]["TreatMissingData"] == "breaching"
+
+
+def test_alarm_lookbacks_are_within_the_cloudwatch_limit(resources: dict):
+    """EvaluationPeriods * Period must be <= 1 week for periods >= 1 hour.
+    Exceeding it fails at deploy time, not at synth - so assert it here."""
+    for r in resources.values():
+        if r["Type"] != "AWS::CloudWatch::Alarm":
+            continue
+        props = r["Properties"]
+        period = int(props["Period"])
+        window = period * int(props["EvaluationPeriods"])
+        if period >= 3600:
+            assert window <= 604800, f"{props.get('AlarmName')}: {window}s lookback exceeds 1 week"
 
 
 # ------------------------------------------------------------- observability

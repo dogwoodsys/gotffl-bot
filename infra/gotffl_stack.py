@@ -407,7 +407,7 @@ class GotfflStack(Stack):
         cw.Alarm(
             self,
             "Staleness",
-            alarm_name="gotffl-no-posts-8-days",
+            alarm_name="gotffl-no-posts-7-days",
             metric=cw.Metric(
                 namespace="Gotffl",
                 metric_name="PostsPublished",
@@ -415,8 +415,13 @@ class GotfflStack(Stack):
                 period=Duration.days(1),
             ),
             threshold=1,
-            evaluation_periods=8,
-            datapoints_to_alarm=8,
+            # CloudWatch caps EvaluationPeriods * Period at one week (604800s)
+            # for periods >= 1 hour, so 7 days is the longest lookback
+            # available. That is still ample: posts land Tue 06:00, Tue 12:00
+            # and Wed 12:00, so the largest legitimate gap is Wed noon to the
+            # following Tue 06:00 - about 5.75 days.
+            evaluation_periods=7,
+            datapoints_to_alarm=7,
             comparison_operator=cw.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cw.TreatMissingData.BREACHING,
         ).add_alarm_action(action)
