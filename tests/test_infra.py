@@ -300,14 +300,6 @@ def test_xray_write_permission_granted(resources: dict):
     assert len(granted) == 5, "every Lambda role needs X-Ray write permission"
 
 
-def test_all_lambdas_share_one_shared_layer(resources: dict):
-    layers = [r for r in resources.values() if r["Type"] == "AWS::Lambda::LayerVersion"]
-    assert len(layers) == 1
-    for fn in resources.values():
-        if fn["Type"] == "AWS::Lambda::Function":
-            assert len(fn["Properties"].get("Layers", [])) == 1
-
-
 def test_league_key_is_baked_into_readers_not_left_to_runtime(resources: dict):
     """A wrong league key posts another league's data. It belongs in the
     reviewed template, not a mutable parameter."""
@@ -330,3 +322,15 @@ def test_publisher_does_not_receive_the_league_key(resources: dict):
         and r["Properties"]["FunctionName"] == "gotffl-publish"
     )
     assert "YAHOO_LEAGUE_KEY" not in publisher["Properties"]["Environment"]["Variables"]
+
+
+def test_every_lambda_gets_both_layers(resources: dict):
+    """Lambda's runtime has boto3 and nothing else. Without the deps layer every
+    function fails at import with "No module named 'requests'" — which is not
+    visible in a synth, only at invocation."""
+    layers = [r for r in resources.values() if r["Type"] == "AWS::Lambda::LayerVersion"]
+    assert len(layers) == 2, "expected a deps layer and a shared layer"
+    for fn in resources.values():
+        if fn["Type"] == "AWS::Lambda::Function":
+            attached = fn["Properties"].get("Layers", [])
+            assert len(attached) == 2, f"{fn['Properties']['FunctionName']} is missing a layer"

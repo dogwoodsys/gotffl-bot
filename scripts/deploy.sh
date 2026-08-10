@@ -18,6 +18,10 @@ if [[ -z "${LEAGUE_KEY:-}" || "$LEAGUE_KEY" == *000000* ]]; then
   exit 1
 fi
 
+# The dependency layer holds platform-specific wheels and is git-ignored, so
+# build it every time rather than trusting whatever is on disk.
+./scripts/build-layer.sh
+
 ACTION="${1:-diff}"
 echo "→ cdk $ACTION   league=$LEAGUE_KEY   profile=$AWS_PROFILE   region=$AWS_REGION"
 exec ./node_modules/.bin/cdk "$ACTION" -c "league_key=$LEAGUE_KEY" "${@:2}"

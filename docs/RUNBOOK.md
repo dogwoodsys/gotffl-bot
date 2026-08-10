@@ -147,6 +147,20 @@ If the table is **not** empty, do not delete it — it holds the record of what
 has already been posted, and losing it means the bot re-posts history. Import
 it into the new stack instead.
 
+## Layers
+
+Two layers are attached to every function:
+
+- **`gotffl-shared`** — this project's modules, committed to git.
+- **`gotffl-deps`** — `requests` and `requests-oauthlib`. Lambda's Python
+  runtime provides boto3 and nothing else, so without this every function fails
+  at import with `No module named 'requests'`. **`cdk synth` cannot see this** —
+  it only appears on invocation.
+
+`layers/deps/` is git-ignored because it holds platform-specific
+(manylinux/aarch64) wheels. `scripts/deploy.sh` rebuilds it on every deploy, so
+there is nothing to remember. To build it alone: `./scripts/build-layer.sh`.
+
 ## Lambda concurrency
 
 This account's Lambda concurrent-execution quota is **10**, and AWS reserves 10

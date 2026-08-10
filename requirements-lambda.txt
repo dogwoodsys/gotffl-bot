@@ -1,0 +1,5 @@
+# Runtime dependencies bundled into the deps layer.
+# boto3/botocore are provided by the Lambda runtime — bundling them would add
+# ~15MB and risk drifting from the version AWS actually runs.
+requests==2.32.3
+requests-oauthlib==2.0.0

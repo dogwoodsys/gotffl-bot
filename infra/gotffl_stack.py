@@ -6,6 +6,8 @@ X credentials. Readers cannot post; the publisher cannot read Yahoo. That split
 is the main security property of this stack and the tests assert it.
 """
 
+from pathlib import Path
+
 from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cloudwatch_actions as cw_actions
@@ -150,6 +152,32 @@ class GotfflStack(Stack):
     # -------------------------------------------------------------- functions
 
     @property
+    def deps_layer(self) -> lambda_.LayerVersion:
+        """Third-party runtime dependencies.
+
+        Lambda's Python runtime provides boto3 and nothing else. Without this
+        layer every function fails at import with "No module named 'requests'".
+        Built by scripts/build-layer.sh, which deploy.sh runs first — the
+        directory is git-ignored because it holds platform-specific wheels.
+        """
+        if not hasattr(self, "_deps_layer"):
+            asset = Path("layers/deps/python")
+            if not asset.exists():
+                raise FileNotFoundError(
+                    "layers/deps/python is missing - run scripts/build-layer.sh first"
+                )
+            self._deps_layer = lambda_.LayerVersion(
+                self,
+                "DepsLayer",
+                layer_version_name="gotffl-deps",
+                code=lambda_.Code.from_asset("layers/deps"),
+                compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
+                compatible_architectures=[lambda_.Architecture.ARM_64],
+                description="requests, requests-oauthlib and their dependencies",
+            )
+        return self._deps_layer
+
+    @property
     def shared_layer(self) -> lambda_.LayerVersion:
         """Cross-Lambda code, mounted at /opt/python. Handlers put that on
         sys.path, so `from shared.logger import get_logger` resolves the same
@@ -206,7 +234,7 @@ class GotfflStack(Stack):
             role=role,
             memory_size=256,
             timeout=timeout,
-            layers=[self.shared_layer],
+            layers=[self.deps_layer, self.shared_layer],
             # Standard: X-Ray active on every Lambda. Without it a slow poll is
             # a number in a log; with it you can see which call was slow.
             tracing=lambda_.Tracing.ACTIVE,

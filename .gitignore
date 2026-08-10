@@ -14,3 +14,6 @@ package-lock.json
 
 # Local deploy config — contains the real league ID
 .env.deploy
+
+# Built by scripts/build-layer.sh — platform-specific wheels
+layers/deps/
