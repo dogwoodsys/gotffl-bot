@@ -121,3 +121,54 @@ def test_missing_credentials_raises_auth_error(ssm):
     ssm.delete_parameter(Name=f"{PREFIX}/refresh_token")
     with pytest.raises(YahooAuthError, match="missing"):
         TokenManager(PREFIX, ssm).access_token(now=NOW)
+
+
+# ------------------------------------------------------- concurrent refresh
+
+@responses.activate
+def test_concurrent_refresh_is_serialised_by_the_lock(ssm, monkeypatch):
+    """Two invocations refresh at once. Yahoo rotates on use, so the loser must
+    reuse the winner's token rather than obtaining a second one that
+    invalidates it."""
+    import shared.yahoo_auth as auth
+
+    calls = {"n": 0}
+
+    def one_winner(kind, key):
+        calls["n"] += 1
+        return calls["n"] == 1
+
+    monkeypatch.setattr(auth.TokenManager, "_acquire_refresh_lock",
+                        staticmethod(lambda now: one_winner("YAHOO_REFRESH", now)))
+    stub_refresh()
+
+    winner = TokenManager(PREFIX, ssm).access_token(now=NOW)
+    loser = TokenManager(PREFIX, ssm).access_token(now=NOW)
+
+    assert winner == loser == "access-new"
+    assert len(responses.calls) == 1, "the loser must not call Yahoo a second time"
+
+
+@responses.activate
+def test_lock_loser_refreshes_anyway_if_no_fresh_token_appeared(ssm, monkeypatch):
+    """If the lock is held but the winner has not written yet, refusing to
+    refresh would return no token at all. Refresh and accept the small risk."""
+    import shared.yahoo_auth as auth
+
+    monkeypatch.setattr(auth.TokenManager, "_acquire_refresh_lock",
+                        staticmethod(lambda now: False))
+    stub_refresh()
+    assert TokenManager(PREFIX, ssm).access_token(now=NOW) == "access-new"
+
+
+@responses.activate
+def test_lock_failure_does_not_block_authentication(ssm, monkeypatch):
+    """No state table (or no permission) must not mean no token."""
+    import shared.idempotency as idem
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("no table")
+
+    monkeypatch.setattr(idem, "claim", explode)
+    stub_refresh()
+    assert TokenManager(PREFIX, ssm).access_token(now=NOW) == "access-new"

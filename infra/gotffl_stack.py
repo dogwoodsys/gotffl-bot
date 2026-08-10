@@ -221,9 +221,12 @@ class GotfflStack(Stack):
             "publish",
             timeout=Duration.seconds(60),
             environment={"X_PREFIX": X_PREFIX, "SHADOW_MODE_PARAM": f"{SSM_ROOT}/shadow_mode"},
-            # Serialize posting so thread replies chain in order and the spend
-            # guard sees an accurate rate.
-            reserved_concurrent_executions=1,
+            # No reserved concurrency: this account's total limit is 10 and AWS
+            # holds 10 back as unreserved, so any reservation is rejected.
+            # Serialization comes from the FIFO outbox instead - every message
+            # uses one MessageGroupId, and SQS keeps a single group strictly in
+            # order with one message in flight at a time. That is what makes
+            # thread replies chain correctly.
         )
         self.state_table.grant_read_write_data(fn)
         fn.add_event_source(
@@ -246,7 +249,7 @@ class GotfflStack(Stack):
         readers: dict[str, lambda_.Function] = {}
 
         specs = [
-            ("PollTransactions", "poll_transactions", Duration.seconds(60), 1),
+            ("PollTransactions", "poll_transactions", Duration.seconds(60), None),
             ("PostScores", "post_scores", Duration.seconds(120), None),
             ("PostStandings", "post_standings", Duration.seconds(120), None),
             ("PostMatchups", "post_matchups", Duration.seconds(120), None),

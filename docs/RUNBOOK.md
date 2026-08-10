@@ -147,6 +147,21 @@ If the table is **not** empty, do not delete it — it holds the record of what
 has already been posted, and losing it means the bot re-posts history. Import
 it into the new stack instead.
 
+## Lambda concurrency
+
+This account's Lambda concurrent-execution quota is **10**, and AWS reserves 10
+as unreserved, so no function can hold a reservation. The stack therefore sets
+none, and serialisation comes from elsewhere:
+
+- **Publisher** — the FIFO outbox uses a single `MessageGroupId`, so SQS keeps
+  one message in flight at a time and thread replies chain correctly.
+- **Poller** — `shared/yahoo_auth.py` takes a 60-second distributed lock before
+  refreshing, so two invocations cannot both rotate the Yahoo refresh token.
+
+Raising the quota (Service Quotas -> Lambda -> Concurrent executions, code
+`L-B99A9384`, adjustable) would let reserved concurrency come back as a second
+layer, but nothing depends on it.
+
 ## Known failure modes
 
 **Yahoo returns 401 repeatedly.** The refresh token was revoked or expired.

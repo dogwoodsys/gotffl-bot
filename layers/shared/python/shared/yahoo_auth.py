@@ -9,6 +9,13 @@ Yahoo may rotate the refresh token when it is used. If a rotated token is not
 written back, the next refresh fails with an unrecoverable 400 and the bot goes
 dark until someone re-authorizes by hand — so the write-back below is not
 optional bookkeeping.
+
+That same rotation makes concurrent refreshes dangerous: two invocations
+refreshing at once each receive a token, the second invalidating the first, and
+whichever write lands last decides whether the stored token is the live one.
+Reserved concurrency used to make this impossible, but this account's Lambda
+limit leaves no headroom to reserve, so `_refresh` takes a short distributed
+lock instead.
 """
 
 import os
@@ -76,7 +83,33 @@ class TokenManager:
         cached = self._cached()
         if cached and cached.expires_at - REFRESH_MARGIN_SECONDS > now:
             return cached.access_token
+
+        if not self._acquire_refresh_lock(now):
+            # Another invocation is refreshing right now. Re-read rather than
+            # racing it: a second rotation would invalidate the token it just
+            # obtained, and the losing write would leave a dead refresh token.
+            fresh = self._cached()
+            if fresh and fresh.expires_at > now:
+                log.info("used token refreshed by a concurrent invocation")
+                return fresh.access_token
+            log.warning("refresh lock held but no fresh token yet; refreshing anyway")
+
         return self._refresh(now)
+
+    @staticmethod
+    def _acquire_refresh_lock(now: int) -> bool:
+        """Best-effort mutual exclusion over one 60-second window.
+
+        Degrades to True when the state table is unreachable — a refresh that
+        might race is better than a bot that cannot authenticate at all.
+        """
+        try:
+            from shared import idempotency
+
+            return idempotency.claim("YAHOO_REFRESH", str(now // 60))
+        except Exception:
+            log.warning("refresh lock unavailable; proceeding without it")
+            return True
 
     def _refresh(self, now: int) -> str:
         refresh_token = self._get("refresh_token")

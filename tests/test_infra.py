@@ -126,19 +126,31 @@ def test_every_reader_has_an_async_failure_destination(resources: dict):
     assert len(configured) == 4, f"expected 4 readers with failure destinations, got {configured}"
 
 
-def test_publisher_is_serialized(template: Template):
-    template.has_resource_properties(
-        "AWS::Lambda::Function",
-        {"FunctionName": "gotffl-publish", "ReservedConcurrentExecutions": 1},
-    )
+def test_no_reserved_concurrency(resources: dict):
+    """This account's Lambda limit is 10 and AWS holds 10 back as unreserved,
+    so any reservation is rejected at deploy time. Publisher ordering comes
+    from the FIFO message group; the poller's token refresh takes a lock."""
+    for r in resources.values():
+        if r["Type"] == "AWS::Lambda::Function":
+            assert "ReservedConcurrentExecutions" not in r["Properties"], (
+                f"{r['Properties']['FunctionName']}: account has no concurrency headroom"
+            )
 
 
-def test_poller_is_serialized(template: Template):
-    """Two concurrent pollers would race the Yahoo token refresh."""
-    template.has_resource_properties(
-        "AWS::Lambda::Function",
-        {"FunctionName": "gotffl-polltransactions", "ReservedConcurrentExecutions": 1},
-    )
+def test_publisher_ordering_relies_on_a_fifo_queue(template: Template):
+    """With no reserved concurrency, the FIFO group is what serialises posting
+    so thread replies chain to their parent."""
+    template.has_resource_properties("AWS::SQS::Queue", {"QueueName": "gotffl-outbox.fifo",
+                                                         "FifoQueue": True})
+
+
+def test_publisher_consumes_one_message_at_a_time(resources: dict):
+    """Batch size 1: one poisoned message cannot sink a batch, and replies
+    cannot interleave."""
+    mappings = [r for r in resources.values()
+                if r["Type"] == "AWS::Lambda::EventSourceMapping"]
+    assert len(mappings) == 1
+    assert mappings[0]["Properties"]["BatchSize"] == 1
 
 
 # -------------------------------------------------------------------- safety
